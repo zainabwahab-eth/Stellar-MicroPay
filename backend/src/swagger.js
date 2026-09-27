@@ -5,14 +5,7 @@
 
 "use strict";
 
-const path = require("path");
-
 const swaggerJsdoc = require("swagger-jsdoc");
-
-// Route files scanned for JSDoc `@swagger` annotations. Federation, analytics,
-// and turrets operations are documented in their route files; the remaining
-// operations are defined statically in `definition.paths` below.
-const routesGlob = `${path.join(__dirname, "routes").split(path.sep).join("/")}/*.js`;
 
 const options = {
   definition: {
@@ -21,22 +14,7 @@ const options = {
       title: "Stellar MicroPay API",
       version: "1.0.0",
       description:
-        "Backend API for Stellar MicroPay — instant micropayments on the Stellar network.\n\n" +
-        "## Rate Limiting\n\n" +
-        "All endpoints are rate-limited. Three limiters apply:\n\n" +
-        "| Limiter | Window | Limit | Routes |\n" +
-        "|---------|--------|-------|--------|\n" +
-        "| Global | 15 minutes | 100 req/IP | All routes |\n" +
-        "| Strict | 1 minute | 20 req/IP | `/api/analytics/*`, `/api/tips/*`, `/api/webhooks/*`, `/federation`, `/api/accounts/register` |\n" +
-        "| Payment | 1 minute | 10 req/IP | `/api/payments/*`, `/api/turrets/*` |\n\n" +
-        "Every response includes the following headers so clients can implement back-off:\n\n" +
-        "| Header | Description |\n" +
-        "|--------|-------------|\n" +
-        "| `RateLimit-Limit` | Maximum requests allowed in the current window |\n" +
-        "| `RateLimit-Remaining` | Requests remaining before the limit is reached |\n" +
-        "| `RateLimit-Reset` | Seconds until the window resets |\n\n" +
-        "When the limit is exceeded the server returns **HTTP 429** with `{ \"error\": \"Too many requests, please try again later.\" }`. " +
-        "Clients should read `RateLimit-Remaining` on each response and add exponential back-off when the value approaches 0.",
+        "Backend API for Stellar MicroPay — instant micropayments on the Stellar network.",
       contact: {
         name: "Stellar MicroPay",
         url: "https://github.com/Emmy123222/Stellar-MicroPay",
@@ -99,117 +77,25 @@ const options = {
             publicKey: { type: "string" },
             totalSentXLM: { type: "string" },
             totalReceivedXLM: { type: "string" },
-            uniqueCounterparties: { type: "integer" },
-            averageTransactionSize: { type: "string" },
+            sentCount: { type: "integer" },
+            receivedCount: { type: "integer" },
             totalTransactions: { type: "integer" },
-            comparison: {
-              type: "object",
-              description: "Week-over-week comparison of payment count and volume",
-              properties: {
-                thisWeekCount: { type: "integer" },
-                lastWeekCount: { type: "integer" },
-                countChangePercent: { type: "integer" },
-                thisWeekVolume: { type: "string" },
-                lastWeekVolume: { type: "string" },
-                volumeChangePercent: { type: "integer" },
-              },
-            },
           },
         },
         TopRecipient: {
           type: "object",
           properties: {
-            address: { type: "string", description: "Recipient Stellar public key" },
-            totalXLMSent: { type: "string", description: "Total XLM sent to the recipient" },
+            publicKey: { type: "string" },
+            totalXLM: { type: "string" },
+            count: { type: "integer" },
           },
         },
         ActivityDay: {
           type: "object",
           properties: {
-            day: {
-              type: "string",
-              description: "Day of week name",
-              example: "Monday",
-            },
-            dayIndex: {
-              type: "integer",
-              description: "Day of week index (0 = Sunday, 6 = Saturday)",
-              minimum: 0,
-              maximum: 6,
-            },
-            transactionCount: {
-              type: "integer",
-              description: "Number of payments on that day",
-            },
-          },
-        },
-        CohortCounterpartySummary: {
-          type: "object",
-          properties: {
-            oneTimeCounterparties: { type: "integer" },
-            repeatCounterparties: { type: "integer" },
-            totalCounterparties: { type: "integer" },
-          },
-        },
-        CohortPeriod: {
-          type: "object",
-          properties: {
-            periodStart: { type: "string", format: "date-time" },
-            periodEnd: { type: "string", format: "date-time" },
-            label: { type: "string" },
-            period: { type: "string", enum: ["month", "week"] },
-            sent: {
-              type: "object",
-              properties: {
-                paymentCount: { type: "integer" },
-                totalXLM: { type: "string" },
-                counterparties: { $ref: "#/components/schemas/CohortCounterpartySummary" },
-              },
-            },
-            received: {
-              type: "object",
-              properties: {
-                paymentCount: { type: "integer" },
-                totalXLM: { type: "string" },
-                counterparties: { $ref: "#/components/schemas/CohortCounterpartySummary" },
-              },
-            },
-            totalCounterparties: { type: "integer" },
-            repeatRate: { type: "integer" },
-          },
-        },
-        CohortBreakdown: {
-          type: "object",
-          properties: {
-            publicKey: { type: "string" },
-            period: { type: "string", enum: ["month", "week"] },
-            periods: { type: "integer" },
-            range: {
-              type: "object",
-              properties: {
-                start: { type: "string", format: "date-time", nullable: true },
-                end: { type: "string", format: "date-time", nullable: true },
-              },
-            },
-            cohorts: {
-              type: "array",
-              items: { $ref: "#/components/schemas/CohortPeriod" },
-            },
-          },
-        },
-        PaymentStreamEvent: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            type: { type: "string", enum: ["sent", "received"] },
-            amount: { type: "string" },
-            asset: { type: "string" },
-            from: { type: "string" },
-            to: { type: "string" },
-            memo: { type: "string", nullable: true },
-            createdAt: { type: "string", format: "date-time" },
-            transactionHash: { type: "string" },
-            pagingToken: { type: "string" },
+            date: { type: "string", format: "date" },
+            totalXLM: { type: "string" },
+            count: { type: "integer" },
           },
         },
         AccountBalance: {
@@ -250,165 +136,6 @@ const options = {
             totalReceived: { type: "string" },
             totalCount: { type: "integer" },
             averageAmount: { type: "string" },
-          },
-        },
-        TxFunctionChallengeRequest: {
-          type: "object",
-          required: ["ownerPublicKey", "type", "config"],
-          properties: {
-            ownerPublicKey: {
-              type: "string",
-              pattern: "^G[A-Z0-9]{55}$",
-              description: "Stellar public key of the txFunction owner",
-            },
-            type: {
-              type: "string",
-              enum: ["dca", "stop_loss", "escrow_release"],
-              description: "Type of automated txFunction",
-            },
-            config: {
-              type: "object",
-              description: "Type-specific configuration — see DcaConfig, StopLossConfig, or EscrowReleaseConfig",
-            },
-          },
-        },
-        TxFunctionChallengeResponse: {
-          type: "object",
-          properties: {
-            challengeXDR: {
-              type: "string",
-              description: "Base64-encoded ManageData transaction XDR the owner must sign",
-            },
-            deploymentHash: {
-              type: "string",
-              description: "SHA-256 hash of the normalised config, included in the challenge",
-            },
-            normalizedConfig: { type: "object" },
-            networkPassphrase: { type: "string" },
-          },
-        },
-        TxFunctionDeployRequest: {
-          type: "object",
-          required: ["ownerPublicKey", "type", "config", "deploymentHash", "signedChallengeXDR"],
-          properties: {
-            ownerPublicKey: { type: "string", pattern: "^G[A-Z0-9]{55}$" },
-            type: { type: "string", enum: ["dca", "stop_loss", "escrow_release"] },
-            config: { type: "object" },
-            deploymentHash: { type: "string" },
-            signedChallengeXDR: {
-              type: "string",
-              description: "The challenge XDR signed by the owner's Freighter (or Ledger) wallet",
-            },
-          },
-        },
-        TxFunctionDeployment: {
-          type: "object",
-          properties: {
-            id: { type: "string", format: "uuid" },
-            ownerPublicKey: { type: "string" },
-            type: { type: "string", enum: ["dca", "stop_loss", "escrow_release"] },
-            status: { type: "string", enum: ["active", "paused", "completed"] },
-            config: { type: "object" },
-            deploymentHash: { type: "string" },
-            signedChallengeXDR: {
-              type: "string",
-              description: "Owner-signed challenge transaction XDR used to deploy",
-            },
-            createdAt: { type: "string", format: "date-time" },
-            createdAtMs: {
-              type: "integer",
-              description: "Creation time in epoch milliseconds",
-            },
-            nextRunAt: { type: "string", format: "date-time", nullable: true },
-            lastExecutedAt: { type: "string", format: "date-time", nullable: true },
-            lastCheckedAt: { type: "string", format: "date-time", nullable: true },
-            lastObservedPriceUsd: { type: "number", nullable: true },
-            lastError: { type: "string", nullable: true },
-          },
-        },
-        ExecutionLogEntry: {
-          type: "object",
-          properties: {
-            id: { type: "string", format: "uuid" },
-            deploymentId: { type: "string", format: "uuid" },
-            status: {
-              type: "string",
-              enum: ["created", "executed", "error", "status"],
-              description: "Execution event type",
-            },
-            message: { type: "string" },
-            result: {
-              type: "object",
-              nullable: true,
-              description: "Operation intent generated by the txFunction evaluator",
-            },
-            createdAt: { type: "string", format: "date-time" },
-          },
-        },
-        Webhook: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            publicKey: { type: "string", description: "Stellar public key being monitored" },
-            url: { type: "string", description: "Destination URL for POST notifications" },
-            createdAt: { type: "string", format: "date-time" },
-          },
-        },
-        WebhookCreateRequest: {
-          type: "object",
-          required: ["publicKey", "url", "secret"],
-          properties: {
-            publicKey: {
-              type: "string",
-              pattern: "^G[A-Z0-9]{55}$",
-              description: "Stellar public key to monitor",
-            },
-            url: {
-              type: "string",
-              format: "uri",
-              description: "HTTPS URL to receive webhook notifications",
-            },
-            secret: {
-              type: "string",
-              minLength: 32,
-              description: "HMAC signing secret (min 32 chars)",
-            },
-          },
-        },
-        WebhookRegistrationResponse: {
-          type: "object",
-          properties: {
-            success: { type: "boolean", example: true },
-            webhook: { $ref: "#/components/schemas/Webhook" },
-          },
-        },
-        WebhookListResponse: {
-          type: "object",
-          properties: {
-            webhooks: {
-              type: "array",
-              items: { $ref: "#/components/schemas/Webhook" },
-            },
-          },
-        },
-        ExportSchedule: {
-          type: "object",
-          properties: {
-            publicKey: { type: "string" },
-            email: { type: "string", format: "email" },
-            frequency: { type: "string", enum: ["daily", "weekly"] },
-            nextRunAt: { type: "string", format: "date-time" },
-          },
-        },
-        ExportScheduleRequest: {
-          type: "object",
-          required: ["email", "frequency"],
-          properties: {
-            email: { type: "string", format: "email" },
-            frequency: {
-              type: "string",
-              enum: ["daily", "weekly"],
-            },
           },
         },
       },
@@ -519,11 +246,6 @@ const options = {
           responses: {
             200: {
               description: "Account info",
-              headers: {
-                "RateLimit-Limit": { schema: { type: "integer", example: 100 } },
-                "RateLimit-Remaining": { schema: { type: "integer" } },
-                "RateLimit-Reset": { schema: { type: "integer" } },
-              },
               content: {
                 "application/json": {
                   schema: {
@@ -537,7 +259,6 @@ const options = {
               },
             },
             404: { description: "Account not found" },
-            429: { description: "Rate limit exceeded — back off and retry after RateLimit-Reset seconds" },
           },
         },
       },
@@ -668,11 +389,6 @@ const options = {
           responses: {
             200: {
               description: "Payment history",
-              headers: {
-                "RateLimit-Limit": { schema: { type: "integer", example: 100 } },
-                "RateLimit-Remaining": { schema: { type: "integer" } },
-                "RateLimit-Reset": { schema: { type: "integer" } },
-              },
               content: {
                 "application/json": {
                   schema: {
@@ -688,7 +404,6 @@ const options = {
                 },
               },
             },
-            429: { description: "Rate limit exceeded" },
           },
         },
       },
@@ -714,6 +429,104 @@ const options = {
                     properties: {
                       success: { type: "boolean" },
                       data: { $ref: "#/components/schemas/PaymentStats" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/analytics/{publicKey}/summary": {
+        get: {
+          tags: ["Analytics"],
+          summary: "Get payment summary for an account",
+          parameters: [
+            {
+              name: "publicKey",
+              in: "path",
+              required: true,
+              schema: { type: "string", pattern: "^G[A-Z0-9]{55}$" },
+            },
+          ],
+          responses: {
+            200: {
+              description: "Analytics summary",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      data: { $ref: "#/components/schemas/AnalyticsSummary" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/analytics/{publicKey}/top-recipients": {
+        get: {
+          tags: ["Analytics"],
+          summary: "Get top payment recipients",
+          parameters: [
+            {
+              name: "publicKey",
+              in: "path",
+              required: true,
+              schema: { type: "string", pattern: "^G[A-Z0-9]{55}$" },
+            },
+          ],
+          responses: {
+            200: {
+              description: "Top recipients",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      data: {
+                        type: "array",
+                        items: {
+                          $ref: "#/components/schemas/TopRecipient",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/analytics/{publicKey}/activity": {
+        get: {
+          tags: ["Analytics"],
+          summary: "Get payment activity by day",
+          parameters: [
+            {
+              name: "publicKey",
+              in: "path",
+              required: true,
+              schema: { type: "string", pattern: "^G[A-Z0-9]{55}$" },
+            },
+          ],
+          responses: {
+            200: {
+              description: "Activity data",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      data: {
+                        type: "array",
+                        items: { $ref: "#/components/schemas/ActivityDay" },
+                      },
                     },
                   },
                 },
@@ -846,187 +659,52 @@ const options = {
           },
         },
       },
-      "/api/auth/refresh": {
-        post: {
-          tags: ["Authentication"],
-          summary: "Refresh an expired access token within the grace window",
-          requestBody: {
-            required: false,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    token: { type: "string", description: "Current JWT token" },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            200: {
-              description: "New JWT token",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      success: { type: "boolean" },
-                      token: { type: "string" },
-                    },
-                  },
-                },
-              },
-            },
-            401: { description: "Token invalid or expired beyond grace window" },
-          },
-        },
-      },
-      "/api/tips/leaderboard/{creatorPublicKey}": {
+      "/api/turrets": {
         get: {
-          tags: ["Tips"],
-          summary: "Get top tippers for a creator",
-          parameters: [
-            {
-              name: "creatorPublicKey",
-              in: "path",
-              required: true,
-              schema: { type: "string", pattern: "^G[A-Z0-9]{55}$" },
-            },
-          ],
+          tags: ["Turrets"],
+          summary: "List deployed turrets",
           responses: {
-            200: {
-              description: "Top tippers",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      success: { type: "boolean" },
-                      data: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            publicKey: { type: "string" },
-                            totalAmount: { type: "string" },
-                            count: { type: "integer" },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
+            200: { description: "List of turrets" },
           },
         },
       },
-      "/api/webhooks": {
+      "/api/turrets/challenge": {
         post: {
-          tags: ["Webhooks"],
-          summary: "Register a new webhook",
-          description: "Register a webhook to receive notifications when payments occur for a specific Stellar public key.",
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/WebhookCreateRequest" },
-              },
-            },
-          },
+          tags: ["Turrets"],
+          summary: "Get a turrets authentication challenge",
           responses: {
-            201: {
-              description: "Webhook registered",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/WebhookRegistrationResponse" },
-                },
-              },
-            },
-            400: { description: "Invalid request body" },
-            429: { description: "Rate limit exceeded" },
+            200: { description: "Challenge data" },
           },
         },
       },
-      "/api/webhooks/{publicKey}": {
-        get: {
-          tags: ["Webhooks"],
-          summary: "List webhooks for an account",
-          parameters: [
-            {
-              name: "publicKey",
-              in: "path",
-              required: true,
-              schema: { type: "string", pattern: "^G[A-Z0-9]{55}$" },
-            },
-          ],
-          responses: {
-            200: {
-              description: "List of webhooks (secrets stripped)",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/WebhookListResponse" },
-                },
-              },
-            },
-            429: { description: "Rate limit exceeded" },
-          },
-        },
-      },
-      "/api/webhooks/{id}": {
-        delete: {
-          tags: ["Webhooks"],
-          summary: "Delete a webhook",
-          parameters: [
-            {
-              name: "id",
-              in: "path",
-              required: true,
-              schema: { type: "string" },
-            },
-          ],
-          responses: {
-            200: {
-              description: "Webhook deleted",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      success: { type: "boolean", example: true },
-                    },
-                  },
-                },
-              },
-            },
-            404: { description: "Webhook not found" },
-            429: { description: "Rate limit exceeded" },
-          },
-        },
-      },
-      "/.well-known/stellar.toml": {
+      "/federation": {
         get: {
           tags: ["Federation"],
-          summary: "SEP-0001 Stellar TOML discovery document",
-          responses: {
-            200: {
-              description: "TOML document containing the federation server URL",
-              content: {
-                "application/toml": {
-                  schema: {
-                    type: "string",
-                    example: 'FEDERATION_SERVER="https://stellarmicropay.io/federation"',
-                  },
-                },
-              },
+          summary: "SEP-0002 federation endpoint",
+          parameters: [
+            {
+              name: "q",
+              in: "query",
+              required: true,
+              schema: { type: "string" },
+              description: "Query string (username or Stellar address)",
             },
+            {
+              name: "type",
+              in: "query",
+              required: true,
+              schema: { type: "string", enum: ["name", "id", "tx_id"] },
+              description: "Query type",
+            },
+          ],
+          responses: {
+            200: { description: "Federation record" },
           },
         },
       },
     },
   },
-  apis: [routesGlob],
+  apis: [],
 };
 
 module.exports = swaggerJsdoc(options);
