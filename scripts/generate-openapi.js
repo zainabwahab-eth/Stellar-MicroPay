@@ -54,25 +54,48 @@ const SCHEMAS = {
       publicKey: { type: "string" },
       totalSentXLM: { type: "string" },
       totalReceivedXLM: { type: "string" },
-      sentCount: { type: "integer" },
-      receivedCount: { type: "integer" },
+      uniqueCounterparties: { type: "integer" },
+      averageTransactionSize: { type: "string" },
       totalTransactions: { type: "integer" },
+      comparison: {
+        type: "object",
+        description: "Week-over-week comparison of payment count and volume",
+        properties: {
+          thisWeekCount: { type: "integer" },
+          lastWeekCount: { type: "integer" },
+          countChangePercent: { type: "integer" },
+          thisWeekVolume: { type: "string" },
+          lastWeekVolume: { type: "string" },
+          volumeChangePercent: { type: "integer" },
+        },
+      },
     },
   },
   TopRecipient: {
     type: "object",
     properties: {
-      publicKey: { type: "string" },
-      totalXLM: { type: "string" },
-      count: { type: "integer" },
+      address: { type: "string", description: "Recipient Stellar public key" },
+      totalXLMSent: { type: "string", description: "Total XLM sent to the recipient" },
     },
   },
   ActivityDay: {
     type: "object",
     properties: {
-      date: { type: "string", format: "date" },
-      totalXLM: { type: "string" },
-      count: { type: "integer" },
+      day: {
+        type: "string",
+        description: "Day of week name",
+        example: "Monday",
+      },
+      dayIndex: {
+        type: "integer",
+        description: "Day of week index (0 = Sunday, 6 = Saturday)",
+        minimum: 0,
+        maximum: 6,
+      },
+      transactionCount: {
+        type: "integer",
+        description: "Number of payments on that day",
+      },
     },
   },
   CohortCounterpartySummary: {
@@ -258,7 +281,15 @@ const SCHEMAS = {
       status: { type: "string", enum: ["active", "paused", "completed"] },
       config: { type: "object" },
       deploymentHash: { type: "string" },
+      signedChallengeXDR: {
+        type: "string",
+        description: "Owner-signed challenge transaction XDR used to deploy",
+      },
       createdAt: { type: "string", format: "date-time" },
+      createdAtMs: {
+        type: "integer",
+        description: "Creation time in epoch milliseconds",
+      },
       nextRunAt: { type: "string", format: "date-time", nullable: true },
       lastExecutedAt: {
         type: "string",
@@ -345,9 +376,8 @@ const SCHEMAS = {
     properties: {
       publicKey: { type: "string" },
       email: { type: "string", format: "email" },
-      frequency: { type: "string", enum: ["daily", "weekly", "monthly"] },
+      frequency: { type: "string", enum: ["daily", "weekly"] },
       nextRunAt: { type: "string", format: "date-time" },
-      createdAt: { type: "string", format: "date-time" },
     },
   },
   ExportScheduleRequest: {
@@ -357,7 +387,7 @@ const SCHEMAS = {
       email: { type: "string", format: "email" },
       frequency: {
         type: "string",
-        enum: ["daily", "weekly", "monthly"],
+        enum: ["daily", "weekly"],
       },
     },
   },
@@ -708,6 +738,8 @@ const PATHS = {
     get: {
       tags: ["Analytics"],
       summary: "Get payment summary for an account",
+      description:
+        "Aggregates the account's most recent payments (up to 200) into totals sent and received, unique counterparties, average transaction size, and a week-over-week comparison. Results are cached for 60 seconds.",
       parameters: [
         {
           name: "publicKey",
@@ -731,6 +763,8 @@ const PATHS = {
             },
           },
         },
+        400: { description: "Invalid Stellar public key format" },
+        429: { description: "Rate limit exceeded" },
       },
     },
   },
@@ -738,6 +772,8 @@ const PATHS = {
     get: {
       tags: ["Analytics"],
       summary: "Get top payment recipients",
+      description:
+        "Ranks the top 5 recipients by total XLM sent, counting sent payments from the account's most recent payments (up to 200), sorted descending by total. Results are cached for 60 seconds.",
       parameters: [
         {
           name: "publicKey",
@@ -748,7 +784,7 @@ const PATHS = {
       ],
       responses: {
         200: {
-          description: "Top recipients",
+          description: "Top recipients by total XLM sent",
           content: {
             "application/json": {
               schema: {
@@ -756,21 +792,36 @@ const PATHS = {
                 properties: {
                   success: { type: "boolean" },
                   data: {
-                    type: "array",
-                    items: { $ref: "TopRecipient" },
+                    type: "object",
+                    properties: {
+                      publicKey: { type: "string" },
+                      topRecipients: {
+                        type: "array",
+                        description: "Up to 5 entries, highest total first.",
+                        items: { $ref: "TopRecipient" },
+                      },
+                      count: {
+                        type: "integer",
+                        description: "Number of recipients returned.",
+                      },
+                    },
                   },
                 },
               },
             },
           },
         },
+        400: { description: "Invalid Stellar public key format" },
+        429: { description: "Rate limit exceeded" },
       },
     },
   },
   "/api/analytics/{publicKey}/activity": {
     get: {
       tags: ["Analytics"],
-      summary: "Get payment activity by day",
+      summary: "Get payment activity by day of week",
+      description:
+        "Counts the account's most recent payments (up to 200) by day of week, always returning all seven days (Sunday first). Results are cached for 60 seconds.",
       parameters: [
         {
           name: "publicKey",
@@ -781,7 +832,7 @@ const PATHS = {
       ],
       responses: {
         200: {
-          description: "Activity data",
+          description: "Payment counts for each day of the week",
           content: {
             "application/json": {
               schema: {
@@ -789,14 +840,23 @@ const PATHS = {
                 properties: {
                   success: { type: "boolean" },
                   data: {
-                    type: "array",
-                    items: { $ref: "ActivityDay" },
+                    type: "object",
+                    properties: {
+                      publicKey: { type: "string" },
+                      activityByDay: {
+                        type: "array",
+                        description: "Always 7 entries, Sunday through Saturday.",
+                        items: { $ref: "ActivityDay" },
+                      },
+                    },
                   },
                 },
               },
             },
           },
         },
+        400: { description: "Invalid Stellar public key format" },
+        429: { description: "Rate limit exceeded" },
       },
     },
   },
@@ -804,6 +864,8 @@ const PATHS = {
     get: {
       tags: ["Analytics"],
       summary: "Get repeat-vs-one-time counterparty cohorts",
+      description:
+        "Groups the account's most recent payments (up to 200) into calendar buckets and reports, per bucket, how many counterparties appeared once versus more than once, split by sent and received payments. Results are cached for 60 seconds.",
       parameters: [
         {
           name: "publicKey",
@@ -815,15 +877,17 @@ const PATHS = {
           name: "period",
           in: "query",
           required: false,
-          schema: { type: "string", enum: ["month", "week"] },
-          description: "Bucket size for the cohort breakdown. Defaults to month.",
+          schema: { type: "string", enum: ["month", "week"], default: "month" },
+          description:
+            "Bucket size for the cohort breakdown. Defaults to month; any value other than week falls back to month.",
         },
         {
           name: "periods",
           in: "query",
           required: false,
-          schema: { type: "integer", minimum: 1, maximum: 12 },
-          description: "How many buckets to include. Defaults to 6.",
+          schema: { type: "integer", minimum: 1, maximum: 12, default: 6 },
+          description:
+            "How many buckets to return, ending with the current period. Defaults to 6; values below 1 or that are not numeric fall back to 6, and values above 12 are capped at 12.",
         },
       ],
       responses: {
@@ -841,6 +905,8 @@ const PATHS = {
             },
           },
         },
+        400: { description: "Invalid Stellar public key format" },
+        429: { description: "Rate limit exceeded" },
       },
     },
   },
@@ -848,6 +914,8 @@ const PATHS = {
     get: {
       tags: ["Analytics"],
       summary: "Stream new payment events as server-sent events",
+      description:
+        "Opens a text/event-stream connection that emits `event: payment` with a JSON payment payload for each new operation, `event: error` with `{ message }` when the underlying Horizon stream fails, and a `: heartbeat` comment every 25 seconds.",
       parameters: [
         {
           name: "publicKey",
@@ -858,13 +926,16 @@ const PATHS = {
       ],
       responses: {
         200: {
-          description: "text/event-stream with payment events",
+          description:
+            "Server-sent event stream. Each `payment` event carries a PaymentStreamEvent payload; `error` events carry `{ message }`.",
           content: {
             "text/event-stream": {
               schema: { $ref: "PaymentStreamEvent" },
             },
           },
         },
+        400: { description: "Invalid Stellar public key format" },
+        429: { description: "Rate limit exceeded" },
       },
     },
   },
@@ -872,6 +943,8 @@ const PATHS = {
     get: {
       tags: ["Analytics"],
       summary: "Get scheduled export configuration",
+      description:
+        "Returns the stored export schedule for the account, or `data: null` when no schedule has been created.",
       parameters: [
         {
           name: "publicKey",
@@ -882,25 +955,31 @@ const PATHS = {
       ],
       responses: {
         200: {
-          description: "Export schedule",
+          description: "Export schedule, or null when none exists",
           content: {
             "application/json": {
               schema: {
                 type: "object",
                 properties: {
                   success: { type: "boolean" },
-                  data: { $ref: "ExportSchedule" },
+                  data: {
+                    nullable: true,
+                    allOf: [{ $ref: "ExportSchedule" }],
+                  },
                 },
               },
             },
           },
         },
-        404: { description: "No export schedule found" },
+        400: { description: "Invalid Stellar public key format" },
+        429: { description: "Rate limit exceeded" },
       },
     },
     post: {
       tags: ["Analytics"],
       summary: "Set up recurring email export",
+      description:
+        "Creates or replaces the recurring email export schedule for the account. Schedules are held in memory, so they do not survive a server restart.",
       parameters: [
         {
           name: "publicKey",
@@ -918,7 +997,7 @@ const PATHS = {
         },
       },
       responses: {
-        200: {
+        201: {
           description: "Export scheduled",
           content: {
             "application/json": {
@@ -927,12 +1006,20 @@ const PATHS = {
                 properties: {
                   success: { type: "boolean" },
                   data: { $ref: "ExportSchedule" },
+                  message: {
+                    type: "string",
+                    example: "Recurring export scheduled successfully",
+                  },
                 },
               },
             },
           },
         },
-        400: { description: "Invalid request body" },
+        400: {
+          description:
+            "Missing email/frequency, frequency other than 'daily' or 'weekly', invalid Stellar public key format, or malformed JSON body",
+        },
+        429: { description: "Rate limit exceeded" },
       },
     },
   },
@@ -940,6 +1027,8 @@ const PATHS = {
     post: {
       tags: ["Analytics"],
       summary: "Manually trigger sending export email",
+      description:
+        "Sends the export email immediately using the account's stored schedule. Fails with 404 when no schedule exists for the account.",
       parameters: [
         {
           name: "publicKey",
@@ -957,13 +1046,21 @@ const PATHS = {
                 type: "object",
                 properties: {
                   success: { type: "boolean" },
-                  message: { type: "string" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean", example: true },
+                    },
+                  },
+                  message: { type: "string", example: "Export email sent" },
                 },
               },
             },
           },
         },
+        400: { description: "Invalid Stellar public key format" },
         404: { description: "No export schedule found" },
+        429: { description: "Rate limit exceeded" },
       },
     },
   },
@@ -1164,6 +1261,7 @@ const PATHS = {
             },
           },
         },
+        400: { description: "Invalid ownerPublicKey format" },
         429: { description: "Rate limit exceeded" },
       },
     },
@@ -1276,6 +1374,8 @@ const PATHS = {
     get: {
       tags: ["Turrets"],
       summary: "Get execution history for a deployment",
+      description:
+        "Returns execution log entries for the deployment, most recent first, paginated with `page` and `limit`.",
       parameters: [
         {
           name: "id",
@@ -1283,10 +1383,24 @@ const PATHS = {
           required: true,
           schema: { type: "string", format: "uuid" },
         },
+        {
+          name: "page",
+          in: "query",
+          required: false,
+          schema: { type: "integer", minimum: 1, default: 1 },
+          description: "Page number to return. Defaults to 1.",
+        },
+        {
+          name: "limit",
+          in: "query",
+          required: false,
+          schema: { type: "integer", minimum: 1, default: 10 },
+          description: "Number of entries per page. Defaults to 10.",
+        },
       ],
       responses: {
         200: {
-          description: "Execution log entries (most recent first)",
+          description: "Execution log entries for the requested page",
           content: {
             "application/json": {
               schema: {
@@ -1296,6 +1410,21 @@ const PATHS = {
                   data: {
                     type: "array",
                     items: { $ref: "ExecutionLogEntry" },
+                  },
+                  pagination: {
+                    type: "object",
+                    properties: {
+                      total: {
+                        type: "integer",
+                        description: "Total entries for the deployment.",
+                      },
+                      page: { type: "integer" },
+                      limit: { type: "integer" },
+                      pages: {
+                        type: "integer",
+                        description: "Total number of pages.",
+                      },
+                    },
                   },
                 },
               },
@@ -1311,6 +1440,8 @@ const PATHS = {
     post: {
       tags: ["Turrets"],
       summary: "Pause a txFunction deployment",
+      description:
+        "Sets the deployment status to `paused`; paused deployments are not evaluated by the runner until resumed.",
       parameters: [
         {
           name: "id",
@@ -1322,6 +1453,17 @@ const PATHS = {
       responses: {
         200: {
           description: "Updated deployment with status 'paused'",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  success: { type: "boolean", example: true },
+                  data: { $ref: "TxFunctionDeployment" },
+                },
+              },
+            },
+          },
         },
         404: { description: "Deployment not found" },
         429: { description: "Rate limit exceeded" },
@@ -1332,6 +1474,8 @@ const PATHS = {
     post: {
       tags: ["Turrets"],
       summary: "Resume a paused txFunction deployment",
+      description:
+        "Sets the deployment status back to `active` so the runner evaluates it again.",
       parameters: [
         {
           name: "id",
@@ -1343,6 +1487,17 @@ const PATHS = {
       responses: {
         200: {
           description: "Updated deployment with status 'active'",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  success: { type: "boolean", example: true },
+                  data: { $ref: "TxFunctionDeployment" },
+                },
+              },
+            },
+          },
         },
         404: { description: "Deployment not found" },
         429: { description: "Rate limit exceeded" },
@@ -1456,6 +1611,8 @@ const PATHS = {
     get: {
       tags: ["Federation"],
       summary: "SEP-0002 federation endpoint",
+      description:
+        "Resolves a Stellar address to an account ID (type=name) or an account ID to a Stellar address (type=id), per SEP-0002. Queries for local federation domains are answered from the local username registry; queries for other domains are forwarded to the federation server advertised by that domain's stellar.toml and the external response body is returned unchanged.",
       parameters: [
         {
           name: "q",
@@ -1493,6 +1650,7 @@ const PATHS = {
         },
         400: { description: "Missing or invalid federation query" },
         404: { description: "Federation record not found" },
+        429: { description: "Rate limit exceeded" },
       },
     },
   },
@@ -1529,11 +1687,12 @@ function generateOpenApiSpec() {
       description:
         "Backend API for Stellar MicroPay — instant micropayments on the Stellar network.\n\n" +
         "## Rate Limiting\n\n" +
-        "All endpoints are rate-limited. Two limiters apply:\n\n" +
+        "All endpoints are rate-limited. Three limiters apply:\n\n" +
         "| Limiter | Window | Limit | Routes |\n" +
         "|---------|--------|-------|--------|\n" +
         "| Global | 15 minutes | 100 req/IP | All routes |\n" +
-        "| Strict | 1 minute | 20 req/IP | `/api/turrets/*`, `/api/webhooks/*` |\n\n" +
+        "| Strict | 1 minute | 20 req/IP | `/api/analytics/*`, `/api/tips/*`, `/api/webhooks/*`, `/federation`, `/api/accounts/register` |\n" +
+        "| Payment | 1 minute | 10 req/IP | `/api/payments/*`, `/api/turrets/*` |\n\n" +
         "Every response includes the following headers so clients can implement back-off:\n\n" +
         "| Header | Description |\n" +
         "|--------|-------------|\n" +

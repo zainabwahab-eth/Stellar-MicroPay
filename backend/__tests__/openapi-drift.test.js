@@ -190,7 +190,10 @@ function getCommittedPaths() {
     paths.push(match[1]);
   }
 
-  return paths;
+  // Federation, analytics, and turrets operations are documented via
+  // `@swagger` annotations in their route files (picked up by swagger-jsdoc's
+  // `apis` glob), so union those in as committed documentation as well.
+  return [...new Set([...paths, ...Object.keys(getAnnotatedPaths())])];
 }
 
 function getCommittedPathsWithMethods() {
@@ -234,6 +237,49 @@ function getCommittedPathsWithMethods() {
 
     if (methods.length > 0) {
       result[pathName] = methods;
+    }
+  }
+
+  // Union in operations documented via `@swagger` annotations in route files.
+  for (const [routePath, methods] of Object.entries(getAnnotatedPaths())) {
+    result[routePath] = [...new Set([...(result[routePath] || []), ...methods])];
+  }
+
+  return result;
+}
+
+/**
+ * Parse `@swagger` annotations out of the route files that swagger-jsdoc scans.
+ * Returns `{ "/path": ["get", "post", ...] }`.
+ */
+function getAnnotatedPaths() {
+  const routesDir = path.join(__dirname, "..", "src", "routes");
+  const result = {};
+
+  for (const file of fs.readdirSync(routesDir)) {
+    if (!file.endsWith(".js")) continue;
+
+    const content = fs.readFileSync(path.join(routesDir, file), "utf8");
+    const comments = content.match(/\/\*\*[\s\S]*?\*\//g) || [];
+
+    for (const comment of comments) {
+      if (!comment.includes("@swagger")) continue;
+
+      const pathMatch = comment.match(/^\s*\*\s+(\/\S+):\s*$/m);
+      if (!pathMatch) continue;
+
+      const methods = [];
+      const methodRegex = /^\s*\*\s+(get|post|put|delete|patch|options|head):\s*$/gim;
+      let methodMatch;
+      while ((methodMatch = methodRegex.exec(comment)) !== null) {
+        methods.push(methodMatch[1].toLowerCase());
+      }
+
+      if (methods.length > 0) {
+        // A path can be split across multiple comment blocks (one per
+        // operation), so union the methods instead of overwriting.
+        result[pathMatch[1]] = [...new Set([...(result[pathMatch[1]] || []), ...methods])];
+      }
     }
   }
 
