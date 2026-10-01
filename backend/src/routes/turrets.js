@@ -204,6 +204,78 @@ router.post("/deploy", strictLimiter, controller.deploy);
 
 /**
  * @swagger
+ * /api/turrets/dca:
+ *   post:
+ *     tags: [Turrets]
+ *     summary: Create a scheduled (DCA) payment deployment
+ *     description: >-
+ *       Creates a turrets deployment that repeatedly converts the configured
+ *       quote asset for the recipient on a fixed interval. The deployment is
+ *       created in the `active` state and starts running immediately.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [ownerPublicKey, recipient, amount]
+ *             properties:
+ *               ownerPublicKey:
+ *                 type: string
+ *                 description: Stellar public key that owns the deployment.
+ *               recipient:
+ *                 type: string
+ *                 description: Stellar public key receiving each scheduled payment.
+ *               amount:
+ *                 type: number
+ *                 description: Amount converted per interval; must be greater than 0.
+ *               asset:
+ *                 type: string
+ *                 default: XLM
+ *                 description: Quote asset code (defaults to `XLM`).
+ *               assetIssuer:
+ *                 type: string
+ *                 nullable: true
+ *                 description: Issuer of the quote asset when it is not `XLM`.
+ *               frequency:
+ *                 type: string
+ *                 enum: [daily, weekly, monthly]
+ *                 default: daily
+ *                 description: How often each scheduled payment runs.
+ *     responses:
+ *       "201":
+ *         description: Scheduled payment deployment created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/TxFunctionDeployment'
+ *       "400":
+ *         description: >-
+ *           Invalid public key, non-positive amount, or unsupported frequency
+ *           (must be `daily`, `weekly`, or `monthly`)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       "429":
+ *         description: >-
+ *           Rate limit exceeded — the strict limiter allows 20 requests per
+ *           minute per IP.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post("/dca", strictLimiter, controller.createDca);
+
+/**
+ * @swagger
  * /api/turrets/{id}:
  *   get:
  *     tags: [Turrets]
@@ -344,6 +416,54 @@ router.post("/:id/pause", strictLimiter, controller.pause);
 
 /**
  * @swagger
+ * /api/turrets/{id}/pause:
+ *   patch:
+ *     tags: [Turrets]
+ *     summary: Pause a txFunction deployment (PATCH variant)
+ *     description: >-
+ *       Identical to `POST /api/turrets/{id}/pause`: sets the deployment
+ *       status to `paused`; paused deployments are not evaluated by the
+ *       runner until resumed.
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: Deployment ID (UUID returned on deploy).
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       "200":
+ *         description: Updated deployment with status `paused`
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/TxFunctionDeployment'
+ *       "404":
+ *         description: txFunction not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       "429":
+ *         description: >-
+ *           Rate limit exceeded — the strict limiter allows 20 requests per
+ *           minute per IP.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.patch("/:id/pause", strictLimiter, controller.pause);
+
+/**
+ * @swagger
  * /api/turrets/{id}/resume:
  *   post:
  *     tags: [Turrets]
@@ -388,5 +508,62 @@ router.post("/:id/pause", strictLimiter, controller.pause);
  *               $ref: '#/components/schemas/Error'
  */
 router.post("/:id/resume", strictLimiter, controller.resume);
+
+/**
+ * @swagger
+ * /api/turrets/{id}:
+ *   delete:
+ *     tags: [Turrets]
+ *     summary: Cancel (delete) a txFunction deployment
+ *     description: >-
+ *       Removes the deployment entirely and logs a `cancelled` execution
+ *       entry. Paused or active deployments can both be cancelled.
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: Deployment ID (UUID returned on deploy).
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       "200":
+ *         description: Deployment cancelled
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                     status:
+ *                       type: string
+ *                       example: cancelled
+ *                     cancelledAt:
+ *                       type: string
+ *                       format: date-time
+ *       "404":
+ *         description: txFunction not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       "429":
+ *         description: >-
+ *           Rate limit exceeded — the strict limiter allows 20 requests per
+ *           minute per IP.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.delete("/:id", strictLimiter, controller.cancel);
 
 module.exports = router;

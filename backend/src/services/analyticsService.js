@@ -8,6 +8,7 @@
 "use strict";
 
 const stellarService = require("./stellarService");
+const logger = require("../utils/logger");
 
 // ─── Cache Configuration ──────────────────────────────────────────────────────
 
@@ -179,4 +180,75 @@ module.exports = {
   getTopRecipients,
   getActivityByDay,
   clearCache,
+  stopCacheSweep,
+  getCachedAnalytics,
+  setCachedAnalytics,
+  clearAnalyticsCache,
 };
+
+// ─── Cache Archiving (#1210) ────────────────────────────────────────────────────
+
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Map structure: key -> { data, timestamp }
+const analyticsCache = new Map();
+
+function sweepCache() {
+  const now = Date.now();
+  let evictedCount = 0;
+
+  for (const [key, entry] of analyticsCache.entries()) {
+    if (now - entry.timestamp > CACHE_TTL_MS) {
+      analyticsCache.delete(key);
+      evictedCount++;
+    }
+  }
+
+  if (evictedCount > 0) {
+    logger.info(`Cache sweep: evicted ${evictedCount} entries`);
+  }
+  return evictedCount;
+}
+
+// The sweep interval starts lazily on the first cached write (and only when
+// one is not already running) so it ticks under fake timers in tests.
+let sweepIntervalId = null;
+
+function ensureSweepInterval() {
+  if (sweepIntervalId === null) {
+    sweepIntervalId = setInterval(sweepCache, SWEEP_INTERVAL_MS);
+    if (sweepIntervalId.unref) {
+      sweepIntervalId.unref();
+    }
+  }
+}
+
+function stopCacheSweep() {
+  clearInterval(sweepIntervalId);
+  sweepIntervalId = null;
+}
+
+function getCachedAnalytics(publicKey) {
+  const entry = analyticsCache.get(publicKey);
+  if (!entry) return null;
+
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    analyticsCache.delete(publicKey);
+    return null;
+  }
+
+  return entry.data;
+}
+
+function setCachedAnalytics(publicKey, data) {
+  ensureSweepInterval();
+  analyticsCache.set(publicKey, {
+    data,
+    timestamp: Date.now(),
+  });
+}
+
+function clearAnalyticsCache() {
+  analyticsCache.clear();
+}
