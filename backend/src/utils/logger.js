@@ -1,22 +1,29 @@
 /**
  * src/utils/logger.js
- * Minimal structured logger with pino-style call signatures, backed by console.
- * Accepts either `logger.info("message")` or `logger.info({ context }, "message")`.
+ * Minimal structured logger with a pino-style call signature.
+ * Replace the console transport with a real logger (pino/winston) if needed.
  */
 
 "use strict";
 
-function format(args) {
-  const [first, ...rest] = args;
-  if (typeof first === "string" || first instanceof Error) {
-    return args;
+/* eslint-disable no-console */
+
+function emit(level, args) {
+  const prefix = `[${level}]`;
+  if (args.length === 0) {
+    console[level](prefix);
+  } else if (args.length === 1) {
+    console[level](prefix, args[0]);
+  } else {
+    console[level](prefix, args[1], args[0]);
   }
-  return [...rest, first];
 }
 
-module.exports = {
-  info: (...args) => console.info(...format(args)),
-  warn: (...args) => console.warn(...format(args)),
-  error: (...args) => console.error(...format(args)),
-  debug: (...args) => console.debug(...format(args)),
+const logger = {
+  debug: (...args) => emit("debug", args),
+  info: (...args) => emit("info", args),
+  warn: (...args) => emit("warn", args),
+  error: (...args) => emit("error", args),
 };
+
+module.exports = logger;

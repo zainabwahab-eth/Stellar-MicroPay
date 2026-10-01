@@ -7,13 +7,8 @@
 
 const analyticsService = require("../src/services/analyticsService");
 const stellarService = require("../src/services/stellarService");
-const {
-  clearAnalyticsCache,
-  stopCacheSweep,
-  setCachedAnalytics,
-  getCachedAnalytics,
-} = require("../src/services/analyticsService");
 const loggerModule = require("../src/utils/logger");
+const { setCachedAnalytics, getCachedAnalytics, clearAnalyticsCache, stopCacheSweep } = analyticsService;
 
 // Mock Stellar service
 jest.mock("../src/services/stellarService");
