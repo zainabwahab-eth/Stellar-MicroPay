@@ -8,7 +8,7 @@
 const express = require("express");
 const router = express.Router();
 const { strictLimiter } = require("../middleware/rateLimit");
-const { validatePublicKey, sanitizeUsername, sanitizePublicKey } = require("../middleware/sanitization");
+const { validatePublicKey, sanitizeUsername } = require("../middleware/sanitization");
 const accountController = require("../controllers/accountController");
 
 /**
@@ -41,6 +41,12 @@ router.get("/:publicKey", strictLimiter, validatePublicKey(), accountController.
  * Fetch just the XLM balance for an account.
  */
 router.get("/:publicKey/balance", strictLimiter, validatePublicKey(), accountController.getBalance);
+
+/**
+ * GET /api/accounts/:publicKey/streaks
+ * Fetch user's transaction streak.
+ */
+router.get("/:publicKey/streaks", strictLimiter, sanitizePublicKey, accountController.getStreaks);
 
 /**
  * POST /api/accounts/register
